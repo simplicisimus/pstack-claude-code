@@ -8,7 +8,7 @@ disable-model-invocation: true
 
 Explore the codebase to answer "how does X work?" questions. Produce architectural explanations at the level of a senior engineer onboarding onto a subsystem, enough to build a working mental model, not so much that it reads like annotated source code.
 
-Each spawn below names a role line in `~/.claude/pstack-models.md` (written by `/setup-pstack`) and a default. Use the line's value, or the default if the file or the line is missing. Resolve each value per the value grammar and spawning rules in the **setup-pstack** skill (`opus`/`sonnet`/`haiku`/`fable` set `model`, `inherit` omits it, `agent:<name>` sets `subagent_type`, `codex:<model>` spawns `pstack:codex-bridge`, `openrouter:<id>` spawns `pstack:openrouter-bridge`, `@<alias>` expands first). If a spawn fails or a bridge replies `FAILED`, rerun it on the default and say so.
+Each spawn below names a role line in `~/.claude/pstack-models.md` (written by `/setup-pstack`) and a default. Use the line's value, or the default if the file or the line is missing. Resolve each value per the value grammar and spawning rules in the **setup-pstack** skill (`opus`/`sonnet`/`haiku`/`fable` set `model`, `inherit` omits it, `agent:<name>` sets `subagent_type`, `codex:<model>` spawns `pstack:codex-bridge`, `grok:<model>` spawns `pstack:grok-bridge`, `openrouter:<id>` spawns `pstack:openrouter-bridge`, each with the prompt-file bridge brief, `@<alias>` expands first). If a spawn fails or a bridge replies `FAILED`, rerun it on the default and say so.
 
 ## Step 1. Assess Complexity
 
@@ -23,9 +23,8 @@ When in doubt, take the simple path.
 
 Decompose the question into 2 to 4 exploration angles, each a distinct slice of the subsystem. Spawn all explorers in a single message:
 
-- `subagent_type`: `general-purpose`
+- `subagent_type`: `pstack:reviewer`, the read-only seat
 - `model`: the `how explorer` line, default `sonnet`
-- Read-only: tell it in the prompt not to edit files
 
 Each explorer gets the prompt in `references/explorer-prompt.md` with its angle filled in. Then go to Step 3.
 
@@ -33,9 +32,8 @@ Each explorer gets the prompt in `references/explorer-prompt.md` with its angle 
 
 Spawn one Agent subagent that explores and explains in one pass:
 
-- `subagent_type`: `general-purpose`
+- `subagent_type`: `pstack:reviewer`, the read-only seat
 - `model`: the `how explainer` line, default `opus`
-- Read-only: tell it in the prompt not to edit files
 
 Build its prompt from `references/explainer-prompt.md` without the explorer-findings section. Go to Step 4.
 
@@ -43,9 +41,8 @@ Build its prompt from `references/explainer-prompt.md` without the explorer-find
 
 Once all explorers have returned, spawn one Agent subagent to synthesize their findings into one explanation:
 
-- `subagent_type`: `general-purpose`
+- `subagent_type`: `pstack:reviewer`, the read-only seat
 - `model`: the `how explainer` line, default `opus`
-- Read-only: tell it in the prompt not to edit files
 
 Build its prompt from `references/explainer-prompt.md` with every explorer's findings filled in.
 

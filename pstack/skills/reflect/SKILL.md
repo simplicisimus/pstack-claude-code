@@ -28,9 +28,9 @@ For each candidate, read the first JSONL line and check that `message.content[0]
 
 ### 2. Spawn three reviewers in parallel
 
-One message, three `Agent` calls, `subagent_type: general-purpose`, with `model` set as below. Reviewers need MCP access for context lookups (tickets, chat threads, observability traces referenced in the transcript). Readonly strips MCPs.
+One message, three `Agent` calls, `subagent_type: pstack:reviewer`, with `model` set as below. Reviewers need MCP access for context lookups (tickets, chat threads, observability traces referenced in the transcript). `pstack:reviewer` keeps MCP access and has no edit tools. A `codex:`, `grok:`, or `openrouter:` reviewer receives the session transcript and has no MCP access, so use one only when the user is fine sending the transcript to that provider.
 
-Each reviewer and the synthesizer name a role line in `~/.claude/pstack-models.md` (written by `/setup-pstack`) and a default. Use the line's value, or the default if the file or the line is missing. Resolve each value per the value grammar and spawning rules in the **setup-pstack** skill (`opus`/`sonnet`/`haiku`/`fable` set `model`, `inherit` omits it, `agent:<name>` sets `subagent_type`, `codex:<model>` spawns `pstack:codex-bridge`, `openrouter:<id>` spawns `pstack:openrouter-bridge`, `@<alias>` expands first). If a spawn fails or a bridge replies `FAILED`, rerun it on the default and say so.
+Each reviewer and the synthesizer name a role line in `~/.claude/pstack-models.md` (written by `/setup-pstack`) and a default. Use the line's value, or the default if the file or the line is missing. Resolve each value per the value grammar and spawning rules in the **setup-pstack** skill (`opus`/`sonnet`/`haiku`/`fable` set `model`, `inherit` omits it, `agent:<name>` sets `subagent_type`, `codex:<model>` spawns `pstack:codex-bridge`, `grok:<model>` spawns `pstack:grok-bridge`, `openrouter:<id>` spawns `pstack:openrouter-bridge`, each with the prompt-file bridge brief, `@<alias>` expands first). If a spawn fails or a bridge replies `FAILED`, rerun it on the default and say so.
 
 | Lens | Role line | Default `model` | Prompt template |
 |---|---|---|---|
@@ -42,7 +42,7 @@ Pass each template verbatim, substituting the transcript path or digest where ma
 
 ### 3. Synthesize
 
-One `Agent` call, `subagent_type: general-purpose`, with `model` from the `reflect judgment, divergent, synthesizer` line (default `opus`). The synthesizer's quality check includes spot-verifying citations, which can require MCP access. Readonly strips MCPs. Use `references/synthesizer.md` verbatim, with each reviewer's full output inlined where marked. The synthesizer returns a structured Accepted / Rejected / Backlog list.
+One `Agent` call, `subagent_type: pstack:reviewer`, with `model` from the `reflect judgment, divergent, synthesizer` line (default `opus`). The synthesizer's quality check includes spot-verifying citations, which can require MCP access, and `pstack:reviewer` keeps it. Use `references/synthesizer.md` verbatim, with each reviewer's full output inlined where marked. The synthesizer returns a structured Accepted / Rejected / Backlog list.
 
 ### 4. Structural enforcement check
 
