@@ -1,0 +1,122 @@
+#!/usr/bin/env bash
+# Runs one pstack panel seat on an external CLI (Codex or Grok Build).
+# The parent writes the prompt to a file. This script writes the answer next to it
+# and prints one status line, so no relay model ever retypes the prompt or the answer.
+#
+#   pstack-seat --cli codex|grok --model M [--effort E] --mode review|write --repo DIR --prompt FILE
+#
+# review: the CLI can read the repository but cannot write to it.
+# write:  allowed only inside a linked git worktree (the Agent tool's isolation: "worktree").
+#         Anywhere else, including the user's main checkout, the seat runs as review.
+set -u
+
+cli="" model="" effort="" mode="review" repo="" prompt=""
+
+usage() {
+	echo "usage: pstack-seat --cli codex|grok --model M [--effort E] --mode review|write --repo DIR --prompt FILE" >&2
+	exit 2
+}
+
+while [ $# -gt 0 ]; do
+	[ $# -ge 2 ] || usage
+	case "$1" in
+	--cli) cli=$2 ;;
+	--model) model=$2 ;;
+	--effort) effort=$2 ;;
+	--mode) mode=$2 ;;
+	--repo) repo=$2 ;;
+	--prompt) prompt=$2 ;;
+	*) usage ;;
+	esac
+	shift 2
+done
+
+fail() {
+	echo "${cli:-pstack}-bridge: FAILED $*"
+	exit 1
+}
+
+case "$cli" in codex | grok) ;; *) fail "--cli must be codex or grok" ;; esac
+case "$mode" in review | write) ;; *) fail "--mode must be review or write" ;; esac
+[ -n "$model" ] || fail "--model is required"
+[ -f "$prompt" ] || fail "prompt file not found: $prompt"
+[ "$effort" = "default" ] && effort=""
+[ -n "$repo" ] || repo=$PWD
+[ -d "$repo" ] || fail "repository not found: $repo"
+command -v "$cli" >/dev/null 2>&1 || fail "$cli is not on PATH"
+
+dir=$(cd "$(dirname "$prompt")" && pwd)
+answer="$dir/answer.md"
+log="$dir/$cli.log"
+rm -f "$answer"
+
+note=""
+wd=""
+if [ "$mode" = "write" ]; then
+	git_dir=$(git rev-parse --path-format=absolute --git-dir 2>/dev/null || true)
+	common_dir=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null || true)
+	if [ -n "$git_dir" ] && [ "$git_dir" != "$common_dir" ]; then
+		wd=$(git rev-parse --show-toplevel)
+	else
+		mode="review"
+		note=" note=write-refused-not-in-a-linked-worktree"
+	fi
+fi
+
+rc=0
+case "$cli" in
+codex)
+	# --ignore-user-config drops the user's MCP servers, hooks, and notify program, which
+	# would otherwise run outside Codex's sandbox. Login still comes from CODEX_HOME.
+	if [ "$mode" = "review" ]; then
+		wd=$repo
+		sandbox="read-only"
+	else
+		sandbox="workspace-write"
+	fi
+	set -- exec --ignore-user-config -m "$model" -s "$sandbox" --skip-git-repo-check \
+		--ephemeral --color never -C "$wd" -o "$answer"
+	[ -n "$effort" ] && set -- "$@" -c "model_reasoning_effort=$effort"
+	codex "$@" - <"$prompt" >"$log" 2>&1 || rc=$?
+	;;
+grok)
+	# Grok's read-only and strict sandboxes can refuse to start (for example when
+	# /var/run/docker.sock is a symlink), so both modes use the workspace sandbox:
+	# reads anywhere, writes only under the working directory, /tmp, and ~/.grok.
+	# A review seat therefore runs from a scratch directory and reads the repository
+	# by absolute path. search_tool and use_tool are Grok's gateway to MCP servers,
+	# which run outside the sandbox, so they are always removed.
+	if [ "$mode" = "review" ]; then
+		case "$(cd "$repo" && pwd -P)/" in
+		/tmp/* | /private/tmp/*) note="$note note=repository-under-tmp-is-writable-by-grok" ;;
+		esac
+		wd="$dir/cwd"
+		mkdir -p "$wd"
+		deny="search_replace,search_tool,use_tool"
+		run_prompt="$dir/prompt.grok.md"
+		{
+			printf 'The repository for this task is at %s. Read it by absolute path. You cannot write to it.\n' "$repo"
+			printf 'Your working directory is a scratch directory. Put your whole result in your final reply.\n\n'
+			cat "$prompt"
+		} >"$run_prompt"
+	else
+		deny="search_tool,use_tool"
+		run_prompt=$prompt
+	fi
+	set -- --prompt-file "$run_prompt" -m "$model" --cwd "$wd" --sandbox workspace \
+		--always-approve --disallowed-tools "$deny" --output-format plain
+	[ -n "$effort" ] && set -- "$@" --reasoning-effort "$effort"
+	(cd "$wd" && grok "$@") >"$answer" 2>"$log" || rc=$?
+	;;
+esac
+
+bytes=0
+[ -f "$answer" ] && bytes=$(wc -c <"$answer" | tr -d ' ')
+if [ "$rc" -ne 0 ] || [ "$bytes" -eq 0 ]; then
+	fail "exit=$rc bytes=$bytes: $(tail -n 3 "$log" 2>/dev/null | tr '\n' ' ' | cut -c1-300)"
+fi
+
+echo "$cli-bridge: model=$model effort=${effort:-default} mode=$mode exit=$rc answer=$answer bytes=$bytes$note"
+if [ "$mode" = "write" ]; then
+	git -C "$wd" status --short
+fi
