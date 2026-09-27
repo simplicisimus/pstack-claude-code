@@ -8,7 +8,7 @@ disable-model-invocation: true
 
 Explore the codebase to answer "how does X work?" questions. Produce architectural explanations at the level of a senior engineer onboarding onto a subsystem, enough to build a working mental model, not so much that it reads like annotated source code.
 
-Each spawn below names a role line in `~/.claude/pstack-models.md` (written by `/setup-pstack`) and a default. Use the line's value, or the default if the file or the line is missing. Resolve each value per the value grammar and spawning rules in the **setup-pstack** skill (`opus`/`sonnet`/`haiku`/`fable` set `model`, `inherit` omits it, `agent:<name>` sets `subagent_type`, `codex:<model>` spawns `pstack:codex-bridge`, `grok:<model>` spawns `pstack:grok-bridge`, `openrouter:<id>` spawns `pstack:openrouter-bridge`, each with the prompt-file bridge brief, `@<alias>` expands first). If a spawn fails or a bridge replies `FAILED`, rerun it on the default and say so.
+Each spawn below names a role line in `~/.claude/pstack-models.md` (written by `/setup-pstack`) and a default. Use the line's value, or the default if the file or the line is missing. Resolve each value per the value grammar and spawning rules in the **setup-pstack** skill (`opus`/`sonnet`/`haiku`/`fable` set `model`, `<model>:<effort>` spawns the generated `pstack-<model>-<effort>` agent (`-review` in a review seat), `inherit` omits it, `agent:<name>` sets `subagent_type`, `codex:<model>` spawns `pstack:codex-bridge`, `grok:<model>` spawns `pstack:grok-bridge`, `openrouter:<id>` spawns `pstack:openrouter-bridge`, each with the prompt-file bridge brief, `@<alias>` expands first). If a spawn fails or a bridge replies `FAILED`, rerun it on the default and say so.
 
 ## Step 1. Assess Complexity
 
