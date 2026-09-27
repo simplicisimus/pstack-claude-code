@@ -22,10 +22,26 @@ prs=$(mktemp)
 gh pr list --author "@me" --state all --limit 1000 \
 	--json number,state,headRefName 2>/dev/null > "$prs" || echo "[]" > "$prs"
 
-# Transcripts dir: ~/.claude/projects/<repo path with every non-alphanumeric char as ->.
-slug=$(printf '%s' "$main_wt" | sed 's#[^A-Za-z0-9]#-#g')
-transcripts="$HOME/.claude/projects/$slug"
+# Transcripts dir: ~/.claude/projects/<path with every non-alphanumeric char as ->. A session
+# started inside a worktree is filed under the worktree's own path, for example
+# <repo slug>--claude-worktrees-<name>, so each worktree checks both directories.
+slugify() { printf '%s' "$1" | sed 's#[^A-Za-z0-9]#-#g'; }
+projects="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/projects"
+transcripts="$projects/$(slugify "$main_wt")"
 now=$(date +%s)
+
+# Files under the given dirs that mention worktree $1 as a path. Claude Code's rg is a
+# shell function that plain bash does not see, so fall back to grep rather than
+# silently finding nothing and marking a live worktree safe.
+mentions() {
+	local wt=$1
+	shift
+	if command -v rg >/dev/null 2>&1; then
+		rg -l -F -e "${wt}/" -e "${wt}\"" "$@"
+	else
+		grep -rlF -e "${wt}/" -e "${wt}\"" "$@"
+	fi
+}
 
 printf "SIZE\tAGE\tMERGED\tDIRTY\tREMOTE\tPR\tLAST_CHAT\tBUCKET\tWORKTREE\n"
 
@@ -63,8 +79,12 @@ git worktree list --porcelain | awk '/^worktree /{print $2}' | while read -r wt;
 	# Most recent chat whose transcript operated in this worktree. Match path
 	# followed by "/" or a quote so glint-482 does not match glint-482-r37.
 	last="-"; last_ts=0
-	if [ -d "$transcripts" ]; then
-		f=$(rg -l -e "${wt}/" -e "${wt}\"" "$transcripts" 2>/dev/null \
+	dirs=()
+	for d in "$transcripts" "$projects/$(slugify "$wt")"; do
+		[ -d "$d" ] && dirs+=("$d")
+	done
+	if [ ${#dirs[@]} -gt 0 ]; then
+		f=$(mentions "$wt" "${dirs[@]}" 2>/dev/null \
 			| xargs stat -f '%m %N' 2>/dev/null | sort -rn | head -1)
 		if [ -n "$f" ]; then last_ts=$(echo "$f" | awk '{print $1}')
 			last=$(date -r "$last_ts" '+%Y-%m-%d' 2>/dev/null); fi
