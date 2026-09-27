@@ -45,7 +45,7 @@ For each reviewer:
 - `subagent_type`: `pstack:reviewer`, the read-only seat
 - `model`: the configured `interrogate reviewers` entry, or the table default with no configured line.
 
-Resolve each entry per the value grammar and spawning rules in the **setup-pstack** skill (`opus`/`sonnet`/`haiku`/`fable` set `model`, `inherit` omits it, `agent:<name>` sets `subagent_type`, `codex:<model>` spawns `pstack:codex-bridge`, `grok:<model>` spawns `pstack:grok-bridge`, `openrouter:<id>` spawns `pstack:openrouter-bridge`, each with the prompt-file bridge brief, `@<alias>` expands first). External reviewers get `Mode: review`, and the filled template below is their prompt file. If a configured entry fails to spawn or a bridge replies `FAILED`, run that reviewer on its table default and say so. A disabled alias drops its reviewer instead.
+Resolve each entry per the value grammar and spawning rules in the **setup-pstack** skill (`opus`/`sonnet`/`haiku`/`fable` set `model`, `<model>:<effort>` spawns the generated `pstack-<model>-<effort>` agent (`-review` in a review seat), `inherit` omits it, `agent:<name>` sets `subagent_type`, `codex:<model>` spawns `pstack:codex-bridge`, `grok:<model>` spawns `pstack:grok-bridge`, `openrouter:<id>` spawns `pstack:openrouter-bridge`, each with the prompt-file bridge brief, `@<alias>` expands first). External reviewers get `Mode: review`, and the filled template below is their prompt file. If a configured entry fails to spawn or a bridge replies `FAILED`, run that reviewer on its table default and say so. A disabled alias drops its reviewer instead.
 
 Read `references/reviewer-prompt.md` and fill in the template with:
 1. The stated intent
