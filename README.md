@@ -46,7 +46,7 @@ Every skill except `setup-pstack` is user-invocable only (`disable-model-invocat
 | `~/.cursor/projects/<slug>/agent-transcripts/` | `~/.claude/projects/<slug>/<session-id>.jsonl` |
 | `subagent_type: "poteto-agent"`, `"Comment Sicko"` | `pstack:poteto-agent`, `pstack:comment-sicko` |
 | `mode: true` sticky mode with `reminder` | A sticky instruction at the top of `poteto-mode` (invoked skill content stays in context) |
-| `cursor-team-kit` (`deslop`, `control-ui`, `control-cli`) | built-in `simplify` skill, built-in browser tools, Bash, `run` skill |
+| `cursor-team-kit` (`deslop`, `control-ui`, `control-cli`) | `deslop` copied into `~/.claude/skills/` (falls back to the built-in `simplify` skill), built-in browser tools, Bash, `run` skill |
 | `create-skill` (Cursor built-in) | `skill-creator` skill |
 
 The "Platform mapping" table in `skills/poteto-mode/SKILL.md` tells the agent how to translate any Cursor term still left in the playbooks.
@@ -123,6 +123,7 @@ Relative to [mix64/pstack-claude-code@cbb2b75](https://github.com/mix64/pstack-c
   - The playbook no longer suggests deleting `~/.claude/projects/` session logs, which `recall` and session pickup read.
   - `worktree-audit.sh` finds sessions filed under a worktree's own path.
   - It falls back to `grep` when `rg` isn't installed. Before, it silently found no chats and could mark a live worktree safe to delete.
+- **Real `/deslop` before commit.** pstack runs Cursor's `deslop` skill when it is installed as a user skill, and only falls back to `simplify` without it. `simplify` targets reuse and efficiency, not AI slop.
 - **Smaller fixes.**
   - `automate-me` uses AskUserQuestion's real `multiSelect` parameter and its limit of 4 options.
   - The arena cross-judge default matches `setup-pstack`.

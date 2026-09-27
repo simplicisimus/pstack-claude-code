@@ -27,7 +27,7 @@ argument-hint: "[task]"
 | `/loop` | Claude Code's `loop` skill. The **Monitor** tool or a background Bash command for event waits. |
 | `control-ui` (browser, Electron, web) | The built-in browser tools (`mcp__Claude_Browser__*`), or Claude in Chrome when the user asks for it. The `run` skill launches the app. |
 | `control-cli` (CLIs, TUIs) | Bash, and the `run` skill for launching. |
-| `/deslop` from `cursor-team-kit` | The built-in `simplify` skill over the diff. |
+| `/deslop` from `cursor-team-kit` | The `deslop` skill when installed (copy `cursor-team-kit/skills/deslop/SKILL.md` to `~/.claude/skills/deslop/`). Otherwise the built-in `simplify` skill over the diff. |
 | `create-skill` (Cursor built-in) | The `skill-creator` skill when available. Otherwise the **Authoring a skill** playbook alone. |
 | Bugbot, cloud-agent PR tools | Whatever PR reviewers and `gh` the repo has. |
 
@@ -46,7 +46,7 @@ Remaining triggers:
 - Nontrivial multi-step → write the throughput checkpoint (Feature step 3).
 - Any prose surface → the **unslop** skill. Your reply is a prose surface. Write it per **Writing the reply**. Agent-facing prose also follows the `skill-creator` skill when available (see Platform mapping).
 - Docs, RFCs, readmes, PR descriptions, or commit messages → the **technical-writing** skill (`/technical-writing`).
-- Before commit → the built-in `simplify` skill over the diff (stands in for `/deslop`).
+- Before commit → the `deslop` skill (`/deslop`), or the built-in `simplify` skill over the diff when `deslop` is not installed.
 - Before review → the **no-comments** skill (`/no-comments`).
 - Shipping UI / IDE / CLI → drive the real surface. Browser, Electron, and web UIs go through the built-in browser tools. CLIs and TUIs go through Bash. The `run` skill launches the app. For bug fixes, reproduce first on the same surface yourself. Hand to the user only under the narrow Bug fix step 1 exception.
 - Any PR-status request → the **Babysit** playbook (`playbooks/babysit.md`). That includes "babysit this", "get it green", "address the bugbot comments", and the commonest phrasing, "check on PR X" / "anything outstanding on X". Never triggered by merely opening a PR. Declare its mode before polling. The playbook's step 1 owns the request-to-mode mapping. Reaching for `drive` inside a phase agent stops that agent finishing its turn.
