@@ -31,7 +31,7 @@ Spawn all N workers in one message with `run_in_background: true` and the step 4
 
 When a worker must start from a non-default pushed branch, name the branch in its brief and have it check that branch out inside its worktree before any work.
 
-Every brief stands alone. Include the goal, scope, exact slice or race arm, how to verify, and what to report. Reports use `PASS`, `ISSUES`, or `BLOCKED` with evidence. A worker that can prove a defect reports `ISSUES` and lists every issue it can prove, not only the first.
+Every brief stands alone. Include the goal, scope, exact slice or race arm, how to verify, and what to report. Reports use `PASS`, `ISSUES`, or `BLOCKED` with evidence. Keep each report to its verdict and a few lines that point at evidence files, so reading N reports stays cheap. A worker that can prove a defect reports `ISSUES` and lists every issue it can prove, not only the first.
 
 If a worker drops out, proceed with N-1 and note it.
 

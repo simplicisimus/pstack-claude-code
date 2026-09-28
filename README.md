@@ -140,6 +140,10 @@ Relative to [mix64/pstack-claude-code@cbb2b75](https://github.com/mix64/pstack-c
   - It falls back to `grep` when `rg` isn't installed. Before, it silently found no chats and could mark a live worktree safe to delete.
 - **Real `/deslop` before commit.** pstack runs Cursor's `deslop` skill when it is installed as a user skill, and only falls back to `simplify` without it. `simplify` targets reuse and efficiency, not AI slop.
 - **Claude effort per role.** The `<model>:<effort>` value and the generated effort agents.
+- **Bounded agent context.** Every call re-reads an agent's whole context, so long-lived agents cost the most. In one measured overnight autopilot run, 9 resumed owners and the root were 56% of the token cost, and 428 short-lived lanes were 42%.
+  - Agents end after their task and hand long work to a fresh agent through a file.
+  - The autopilots start a fresh owner agent for each fix round and keep the root's context small.
+  - Audit lanes run before live lanes, lanes report in a few lines that point at files, and a PR parks for the operator after three unclean rounds.
 - **Smaller fixes.**
   - `automate-me` uses AskUserQuestion's real `multiSelect` parameter and its limit of 4 options.
   - The arena cross-judge default matches `setup-pstack`.
