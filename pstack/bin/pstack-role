@@ -50,6 +50,8 @@ done
 case "$seat" in review | write) ;; *) usage ;; esac
 [ -n "$role" ] || usage
 agents_dir=$(dirname "$config")/agents
+# setup-pstack writes this line into every effort agent. Bump both together when its templates change.
+template="pstack effort agent template 2"
 
 lookup() {
 	[ -f "$config" ] || return 1
@@ -116,7 +118,11 @@ resolve() {
 		local name="pstack-$model-$effort"
 		[ "$seat" = review ] && name="$name-review"
 		if [ -f "$agents_dir/$name.md" ]; then
-			echo "subagent_type=$name"
+			if grep -qF "$template" "$agents_dir/$name.md"; then
+				echo "subagent_type=$name"
+			else
+				echo "subagent_type=$name note=stale-$name-agent-rerun-setup-pstack"
+			fi
 		else
 			echo "$(plain_seat "$model") note=missing-$name-agent-so-session-effort-rerun-setup-pstack"
 		fi

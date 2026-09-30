@@ -8,7 +8,10 @@ tmp=$(mktemp -d "${TMPDIR:-/tmp}/pstack-role-test.XXXXXX")
 trap 'rm -rf "$tmp"' EXIT
 
 mkdir -p "$tmp/agents"
-touch "$tmp/agents/pstack-opus-max-review.md" "$tmp/agents/pstack-opus-max.md"
+for name in pstack-opus-max-review pstack-opus-max; do
+	printf -- '---\nname: %s\n---\n\n<!-- pstack effort agent template 2 -->\n' "$name" >"$tmp/agents/$name.md"
+done
+printf -- '---\nname: pstack-haiku-low-review\n---\n' >"$tmp/agents/pstack-haiku-low-review.md"
 while IFS= read -r line; do printf '%s\r\n' "$line"; done >"$tmp/pstack-models.md" <<'EOF'
 # pstack model configuration. One line per role.
 # @old: sonnet
@@ -24,6 +27,7 @@ interrogate reviewers: opus:max, @gpt, @grok, @free
 swarm workers: @free
 mechanical edits: inherit
 why investigators: agent:my-investigator
+reflect tooling: haiku:low
 arena runners: opus:max, @gpt
 arena cross-judge pool: @or, @chain, @missing, gpt-9
 architect runners: @free
@@ -60,6 +64,10 @@ check "a missing effort agent falls back to the plain model and says so" \
 check "a single-value role on a disabled alias falls back to the default" \
 "seat=1 value=sonnet subagent_type=general-purpose model=sonnet note=disabled-alias-so-skill-default" \
 "$(run --seat write --write-agent general-purpose --default sonnet "swarm workers")"
+
+check "an effort agent from an older template still runs and is flagged" \
+"seat=1 value=haiku:low subagent_type=pstack-haiku-low-review note=stale-pstack-haiku-low-review-agent-rerun-setup-pstack" \
+"$(run --seat review --default sonnet "reflect tooling")"
 
 check "inherit omits the model" \
 "seat=1 value=inherit subagent_type=pstack:poteto-agent" \
