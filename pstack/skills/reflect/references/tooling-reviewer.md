@@ -34,7 +34,7 @@ Findings must point to skills, tools, or MCPs invoked in this transcript. Specul
 
 - `Read` tool calls against any `SKILL.md` file (workspace `.claude/skills/`, user-level `~/.claude/skills/`, or plugin-installed paths under `~/.claude/plugins/`)
 - `Agent` prompts that name a skill path
-- Tool calls (Shell, Grep, MCP, etc.) that match a skill's documented commands
+- Tool calls (Bash, Read, MCP, etc.) that match a skill's documented commands
 
 Two valid finding shapes:
 
