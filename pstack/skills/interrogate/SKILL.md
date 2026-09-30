@@ -1,6 +1,7 @@
 ---
 name: interrogate
 description: "Use for \"interrogate\", \"adversarial review\", \"multi-model review\", \"challenge this\", \"stress test this code\", \"find blind spots\", or \"tear this apart\". Multiple LLM reviewers challenge changes from independent angles."
+argument-hint: "[PR, diff, or files]"
 disable-model-invocation: true
 ---
 
@@ -45,7 +46,7 @@ For each reviewer:
 - `subagent_type`: `pstack:reviewer`, the read-only seat
 - `model`: the configured `interrogate reviewers` entry, or the table default with no configured line.
 
-Resolve each entry per the value grammar and spawning rules in the **setup-pstack** skill (`opus`/`sonnet`/`haiku`/`fable` set `model`, `<model>:<effort>` spawns the generated `pstack-<model>-<effort>` agent (`-review` in a review seat), `inherit` omits it, `agent:<name>` sets `subagent_type`, `codex:<model>` spawns `pstack:codex-bridge`, `grok:<model>` spawns `pstack:grok-bridge`, `openrouter:<id>` spawns `pstack:openrouter-bridge`, each with the prompt-file bridge brief, `@<alias>` expands first). External reviewers get `Mode: review`, and the filled template below is their prompt file. If a configured entry fails to spawn or a bridge replies `FAILED`, run that reviewer on its table default and say so. A disabled alias drops its reviewer instead.
+Resolve the line with `pstack-role --seat review --panel --default 'opus, opus, sonnet' 'interrogate reviewers'`. It applies the value grammar in the **setup-pstack** skill and prints one line per reviewer with its `subagent_type`, its `model` when one applies, and the brief of a bridge seat. External reviewers get `Mode: review`, and the filled template below is their prompt file. If a configured entry fails to spawn or a bridge replies `FAILED`, run that reviewer on its table default and say so. A disabled alias drops its reviewer instead.
 
 Read `references/reviewer-prompt.md` and fill in the template with:
 1. The stated intent
@@ -110,4 +111,4 @@ Present the verdict in this structure:
 
 ## pstack on Claude Code
 
-`<pstack>` is `${CLAUDE_PLUGIN_ROOT}`. Other pstack skills named here (in bold, or as `principle-*`) live at `<pstack>/skills/<name>/SKILL.md`. They are user-invocable only, so Read them with the Read tool instead of the Skill tool. Per-role models come from `~/.claude/pstack-models.md` (see the **setup-pstack** skill). Cursor-specific terms map per the Platform mapping table in `<pstack>/skills/poteto-mode/SKILL.md`.
+When you run this skill directly, `<pstack>` is `${CLAUDE_PLUGIN_ROOT}`, `<store>` is `${CLAUDE_PLUGIN_DATA}/store`, and this session's ID is `${CLAUDE_SESSION_ID}`. When poteto-mode, another pstack skill, or a brief sent you here, use the values it names. Other pstack skills named here (in bold, or as `principle-*`) live at `<pstack>/skills/<name>/SKILL.md`. They are user-invocable only, so Read them with the Read tool instead of the Skill tool. Per-role models come from `~/.claude/pstack-models.md` (see the **setup-pstack** skill). Cursor-specific terms, and a todolist in a session without a todo tool, map per `<pstack>/skills/poteto-mode/references/claude-code.md`.

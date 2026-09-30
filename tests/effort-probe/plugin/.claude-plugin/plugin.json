@@ -1,0 +1,6 @@
+{
+  "name": "effort-probe",
+  "version": "0.0.1",
+  "description": "Test fixture: three agents that differ only in their effort frontmatter.",
+  "author": { "name": "pstack-claude-code tests" }
+}

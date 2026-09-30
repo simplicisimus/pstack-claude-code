@@ -1,11 +1,14 @@
 {
   "name": "pstack-claude-code",
-  "owner": { "name": "mix64" },
+  "owner": { "name": "simplicisimus" },
+  "description": "pstack for Claude Code: poteto's rigorous agent workflows, with Codex, Grok, and OpenRouter panel seats.",
   "plugins": [
     {
       "name": "pstack",
       "source": "./pstack",
-      "description": "poteto's rigorous agent workflows, ported from Cursor to Claude Code."
+      "description": "poteto's rigorous agent workflows, ported from Cursor to Claude Code.",
+      "category": "developer-tools",
+      "tags": ["workflow", "principles", "review", "planning"]
     }
   ]
 }

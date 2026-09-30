@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+# PreToolUse hook for Bash and Monitor. Only calls from pstack's review seats reach the checker, so every
+# other call pays for one shell and a pattern match. Without node the prompt's rules still apply.
+input=$(cat)
+case "$input" in
+*'"agent_type"'*pstack*review*) ;;
+*) exit 0 ;;
+esac
+command -v node >/dev/null 2>&1 || exit 0
+printf '%s' "$input" | exec node "$(dirname "$0")/review-seat-guard.mjs"

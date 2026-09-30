@@ -6,7 +6,8 @@
 import { readFileSync } from "node:fs";
 
 const API = "https://openrouter.ai/api/v1";
-const TIMEOUT_MS = Number(process.env.OPENROUTER_TIMEOUT_MS) || 600_000;
+// Under the Bash tool's default 10-minute timeout, so the bridge never sees the command moved to the background.
+const TIMEOUT_MS = Number(process.env.OPENROUTER_TIMEOUT_MS) || 570_000;
 
 function parseArgs(argv) {
   const args = {};

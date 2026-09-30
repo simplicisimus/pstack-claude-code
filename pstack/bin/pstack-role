@@ -1,0 +1,221 @@
+#!/usr/bin/env bash
+# Resolves one pstack role from pstack-models.md into Agent tool calls, one line per seat.
+# The value grammar is in the setup-pstack skill.
+#
+#   pstack-role --seat review|write [--panel] [--default "V1, V2"] [--write-agent TYPE] [--config FILE] ROLE
+#
+# --panel marks a role whose seats all run, so a disabled alias drops its seat and is never refilled.
+# Without it, the role picks one value, and it falls back to the default when every entry is disabled.
+#
+# Each seat prints one line of key=value fields:
+#   seat=N value=V subagent_type=T [model=M] [isolation=worktree]
+#     [bridge=codex|grok|openrouter brief_model=M brief_effort=E brief_mode=review|write] [note=...]
+#   seat=N value=V skip=alias-disabled
+#   seat=N value=V error=REASON no-default
+# A configured value that cannot be used falls back to the default at the same position, with note= saying why.
+set -u
+
+seat="" defaults="" write_agent="pstack:poteto-agent" role="" panel=0
+config="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/pstack-models.md"
+
+usage() {
+	echo "usage: pstack-role --seat review|write [--panel] [--default \"V1, V2\"] [--write-agent TYPE] [--config FILE] ROLE" >&2
+	exit 2
+}
+
+while [ $# -gt 0 ]; do
+	case "$1" in
+	--seat | --default | --write-agent | --config)
+		[ $# -ge 2 ] || usage
+		case "$1" in
+		--seat) seat=$2 ;;
+		--default) defaults=$2 ;;
+		--write-agent) write_agent=$2 ;;
+		--config) config=$2 ;;
+		esac
+		shift 2
+		;;
+	--panel)
+		panel=1
+		shift
+		;;
+	-*) usage ;;
+	*)
+		[ -z "$role" ] || usage
+		role=$1
+		shift
+		;;
+	esac
+done
+case "$seat" in review | write) ;; *) usage ;; esac
+[ -n "$role" ] || usage
+
+lookup() {
+	[ -f "$config" ] || return 1
+	awk -v key="$1" '
+		{ sub(/\r$/, "") }
+		/^[[:space:]]*#/ { next }
+		{
+			line = $0
+			sub(/^[[:space:]]+/, "", line)
+			if (index(line, key ":") == 1) {
+				value = substr(line, length(key) + 2)
+				gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
+				print value
+				found = 1
+				exit
+			}
+		}
+		END { exit !found }' "$config"
+}
+
+split_list() {
+	printf '%s\n' "$1" | tr ',' '\n' | sed 's/^[[:space:]]*//; s/[[:space:]]*$//' | grep -v '^$'
+}
+
+plain_seat() {
+	if [ "$seat" = review ]; then
+		printf 'subagent_type=pstack:reviewer'
+	else
+		printf 'subagent_type=%s' "$write_agent"
+	fi
+	[ -n "$1" ] && printf ' model=%s' "$1"
+	echo
+}
+
+resolve() {
+	local v=$1
+	case "$v" in
+	opus | sonnet | haiku | fable) plain_seat "$v" ;;
+	inherit) plain_seat "" ;;
+	agent:?*) echo "subagent_type=${v#agent:}" ;;
+	codex:?* | grok:?*)
+		local cli=${v%%:*} rest=${v#*:} model effort=default
+		case "$rest" in
+		*:*) model=${rest%:*} effort=${rest##*:} ;;
+		*) model=$rest ;;
+		esac
+		if [ -z "$model" ] || [ -z "$effort" ]; then
+			echo "error=malformed-$cli-value"
+			return
+		fi
+		local line="subagent_type=pstack:$cli-bridge bridge=$cli brief_model=$model brief_effort=$effort brief_mode=$seat"
+		[ "$seat" = write ] && line="$line isolation=worktree"
+		echo "$line"
+		;;
+	openrouter:?*)
+		local line="subagent_type=pstack:openrouter-bridge bridge=openrouter brief_model=${v#openrouter:} brief_effort=default brief_mode=review"
+		[ "$seat" = write ] && line="$line note=returns-a-patch-that-you-apply"
+		echo "$line"
+		;;
+	*:*)
+		local model=${v%%:*} effort=${v#*:}
+		case "$model" in opus | sonnet | haiku | fable) ;; *) echo "error=unknown-value" && return ;; esac
+		case "$effort" in low | medium | high | xhigh | max) ;; *) echo "error=unknown-effort" && return ;; esac
+		local agent=poteto-agent
+		[ "$seat" = review ] && agent=reviewer
+		echo "subagent_type=pstack:$agent-$effort model=$model"
+		;;
+	*) echo "error=unknown-value" ;;
+	esac
+}
+
+# Prints the value an entry stands for: itself, or its alias's value. Returns 3 for a disabled alias, 4 for an error.
+expand() {
+	local v=$1
+	case "$v" in
+	@*)
+		local target
+		if ! target=$(lookup "$v"); then
+			echo "undefined-alias"
+			return 4
+		fi
+		[ -n "$target" ] || return 3
+		case "$target" in
+		@* | *,*)
+			echo "alias-must-name-one-plain-value"
+			return 4
+			;;
+		esac
+		echo "$target"
+		;;
+	*) echo "$v" ;;
+	esac
+}
+
+source_label=config
+if ! configured=$(lookup "$role") || [ -z "$configured" ]; then
+	configured=$defaults
+	source_label=default
+	[ -f "$config" ] || source_label="default (no $config)"
+fi
+if [ -z "$configured" ]; then
+	echo "pstack-role: no value for '$role' in $config and no --default" >&2
+	exit 1
+fi
+echo "# role=\"$role\" seat=$seat source=$source_label"
+
+entries=$(split_list "$configured")
+count=$(printf '%s\n' "$entries" | grep -c .)
+default_entries=$(split_list "$defaults")
+
+fallback() {
+	local n=$1 reason=$2 original=$3 fb
+	fb=$(printf '%s\n' "$default_entries" | sed -n "${n}p")
+	[ -n "$fb" ] || fb=$(printf '%s\n' "$default_entries" | sed -n 1p)
+	if [ -z "$fb" ]; then
+		echo "seat=$n value=$original error=$reason no-default"
+		return
+	fi
+	local fields
+	fields=$(resolve "$fb")
+	echo "seat=$n value=$fb $fields note=fallback-for-$original-$reason"
+}
+
+disabled=0
+while IFS= read -r entry; do
+	[ -n "$entry" ] || continue
+	status=0
+	expand "$entry" >/dev/null || status=$?
+	[ "$status" -eq 3 ] && disabled=$((disabled + 1))
+done <<EOF
+$entries
+EOF
+if [ "$panel" -eq 0 ] && [ "$disabled" -eq "$count" ] && [ -n "$default_entries" ]; then
+	n=0
+	while IFS= read -r fb; do
+		[ -n "$fb" ] || continue
+		n=$((n + 1))
+		echo "seat=$n value=$fb $(resolve "$fb") note=disabled-alias-so-skill-default"
+	done <<EOF
+$default_entries
+EOF
+	exit 0
+fi
+
+n=0
+while IFS= read -r entry; do
+	[ -n "$entry" ] || continue
+	n=$((n + 1))
+	status=0
+	value=$(expand "$entry") || status=$?
+	case $status in
+	3)
+		echo "seat=$n value=$entry skip=alias-disabled"
+		continue
+		;;
+	4)
+		fallback "$n" "$value" "$entry"
+		continue
+		;;
+	esac
+	shown=$entry
+	[ "$entry" = "$value" ] || shown="$entry=$value"
+	fields=$(resolve "$value")
+	case "$fields" in
+	error=*) fallback "$n" "${fields#error=}" "$entry" ;;
+	*) echo "seat=$n value=$shown $fields" ;;
+	esac
+done <<EOF
+$entries
+EOF

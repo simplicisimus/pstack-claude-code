@@ -2,3 +2,4 @@ node_modules/
 .poteto-mode-tools-install-key
 .DS_Store
 Thumbs.db
+pstack/evals/results/
