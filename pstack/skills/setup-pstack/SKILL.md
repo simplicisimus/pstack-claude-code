@@ -5,7 +5,7 @@ description: Configure which model or subagent pstack uses per role, including C
 
 # Setup pstack
 
-Write `~/.claude/pstack-models.md`, the per-role model config that pstack skills read before they spawn subagents. When `CLAUDE_CONFIG_DIR` is set, the file and the agents below live under it instead of `~/.claude`.
+Write `~/.claude/pstack-models.md`, the per-role model config that pstack skills read before they spawn subagents. When `CLAUDE_CONFIG_DIR` is set, read `~/.claude` in this skill as that directory.
 
 ## Value grammar
 
@@ -14,7 +14,7 @@ Every role value is one of these. A panel role takes a comma-separated list, and
 | Value | Agent tool call |
 |---|---|
 | `opus`, `sonnet`, `haiku`, `fable` | `model` set to the value. `subagent_type` as the skill prescribes, except that a review seat uses `pstack:reviewer` (see Seat modes). |
-| `<model>:<effort>` | A Claude model at a fixed effort, for example `opus:max` or `sonnet:high`. `<model>` is `opus`, `sonnet`, `haiku`, or `fable`, and `<effort>` is `low`, `medium`, `high`, `xhigh`, or `max`, as far as that model supports it. `subagent_type: "pstack-<model>-<effort>-review"` in a review seat and `"pstack-<model>-<effort>"` in a write seat, `model` omitted. These are the effort agents this skill generates (see Effort agents). A plain `opus` runs at the session's effort level. |
+| `<model>:<effort>` | A Claude model at a fixed effort, for example `opus:max` or `sonnet:high`. `<model>` is `opus`, `sonnet`, `haiku`, or `fable`, and `<effort>` is `low`, `medium`, `high`, `xhigh`, or `max`, as far as that model supports it. `subagent_type: "pstack:reviewer-<effort>"` in a review seat and `"pstack:poteto-agent-<effort>"` in a write seat, even where the skill prescribes another write agent. `model` is set to `<model>`. These agents ship with pstack (see Effort agents). A plain `opus` runs at the session's effort level. |
 | `inherit` | `model` omitted. The role runs on the parent session's model. Review seats still use `pstack:reviewer`. |
 | `agent:<name>` | `subagent_type: "<name>"`, `model` omitted. For custom agents you defined in `~/.claude/agents/` or another plugin. It gets the normal prompt with the seat mode stated in it. Its own tool list decides whether it can write, so use it in review seats only when that agent cannot edit files. |
 | `codex:<model>[:<effort>]` | `subagent_type: "pstack:codex-bridge"`, with the bridge brief below. Runs on the ChatGPT subscription through the Codex CLI. `<effort>` is Codex's `model_reasoning_effort` (for example `medium`, `high`, `xhigh`). Omitted means Codex's built-in default. Codex reads files and runs commands itself, so it fits every seat. |
@@ -29,7 +29,7 @@ Every role value is one of these. A panel role takes a comma-separated list, and
 - Spawn one Agent per line with its `subagent_type`, plus `model` and `isolation` when the line has them.
 - A line with `bridge=` is a bridge seat. Fill the bridge brief below from its `brief_*` fields.
 - A line with `skip=` is a disabled seat. Drop it.
-- A `note=` says why a seat fell back to the skill default or lost its fixed effort, or how to use the seat, such as the patch an `openrouter:` write seat returns. Tell the user about a fallback.
+- A `note=` says why a seat fell back to the skill default, or how to use the seat, such as the patch an `openrouter:` write seat returns. Tell the user about a fallback.
 - A line with `error=` has no usable value and no default. Drop the seat and tell the user.
 
 When the session has no Bash tool, apply the grammar yourself with the same rules.
@@ -38,51 +38,12 @@ When the session has no Bash tool, apply the grammar yourself with the same rule
 
 Every spawn is a **review seat** or a **write seat**. The skill says which.
 
-- **Review seat.** Reads, runs read-only commands, and returns its work in its reply. Review seats are interrogate reviewers, the arena cross-judge, how explorers and explainers, why investigators and synthesizer, reflect reviewers and synthesizer, and any runner whose artifact is a document rather than code. A Claude model in a review seat runs as `subagent_type: "pstack:reviewer"`, which has no Edit, Write, NotebookEdit, or Agent tools but keeps Bash and MCP tools. A bridge in a review seat gets `Mode: review`.
-- **Write seat.** Edits code: arena and swarm runners that produce code, and code delegates. A Claude model in a write seat keeps the `subagent_type` and isolation its skill prescribes. A bridge in a write seat is always spawned with `isolation: "worktree"` and gets `Mode: write`. It writes only in that worktree and refuses anywhere else, including the user's checkout. Its changes stay uncommitted there. Review the diff and apply what you accept to the user's checkout yourself, for example with `git -C <worktree> diff | git apply`. Claude Code creates the worktree from the repository's default branch unless the user set `"worktree": {"baseRef": "head"}` in settings, and it never carries uncommitted changes. On a feature branch, commit first and tell the user to set `baseRef` if the seat must start from the current branch.
+- **Review seat.** Reads, runs read-only commands, and returns its work in its reply. Review seats are interrogate reviewers, the arena cross-judge, how explorers and explainers, why investigators and synthesizer, reflect reviewers and synthesizer, and any runner whose artifact is a document rather than code. A Claude model in a review seat runs as `subagent_type: "pstack:reviewer"`, or `"pstack:reviewer-<effort>"` at a fixed effort. Neither has Edit, Write, NotebookEdit, or Agent tools, and both keep Bash and MCP tools. A bridge in a review seat gets `Mode: review`.
+- **Write seat.** Edits code: arena and swarm runners that produce code, and code delegates. A Claude model in a write seat keeps the `subagent_type` and isolation its skill prescribes. At a fixed effort it runs as `pstack:poteto-agent-<effort>` with that isolation. A bridge in a write seat is always spawned with `isolation: "worktree"` and gets `Mode: write`. It writes only in that worktree and refuses anywhere else, including the user's checkout. Its changes stay uncommitted there. Review the diff and apply what you accept to the user's checkout yourself, for example with `git -C <worktree> diff | git apply`. Claude Code creates the worktree from the repository's default branch unless the user set `"worktree": {"baseRef": "head"}` in settings, and it never carries uncommitted changes. On a feature branch, commit first and tell the user to set `baseRef` if the seat must start from the current branch.
 
 ### Effort agents
 
-Claude Code's Agent tool has no effort parameter. A subagent's effort comes from the `effort` frontmatter of its definition, so each `<model>:<effort>` value needs an agent of its own. Shipping every model and effort pair with the plugin would put all of their descriptions in every session, so this skill generates only the pairs the file uses. For each one, step 6 writes two agents to `~/.claude/agents/`.
-
-**Review variant**, `~/.claude/agents/pstack-<model>-<effort>-review.md`:
-
-```markdown
----
-name: pstack-<model>-<effort>-review
-description: Read-only pstack seat on <model> at <effort> effort. Generated by /pstack:setup-pstack for the <model>:<effort> role value in review seats. Reads, searches, runs read-only commands, and uses MCP tools, but has no tools that edit files or start subagents.
-model: <model>
-effort: <effort>
-disallowedTools: Edit, Write, NotebookEdit, Agent
----
-
-# pstack reviewer (<model>, <effort> effort)
-
-<!-- pstack effort agent template 2 -->
-
-You are a read-only pstack seat. Do the task in your brief and put everything you produce in your final reply.
-
-Never change files or repository state. You have no edit tools and cannot start subagents. Do not get around that with Bash or MCP tools: no redirects into files, `sed -i`, `git commit`, `git checkout`, `git stash`, package installs, or MCP tools that create, edit, or delete. If the task needs scratch files, put them in a directory from `mktemp -d`.
-```
-
-**Write variant**, `~/.claude/agents/pstack-<model>-<effort>.md`, which stands in for `pstack:poteto-agent`:
-
-```markdown
----
-name: pstack-<model>-<effort>
-description: pstack code delegate in poteto's style on <model> at <effort> effort. Generated by /pstack:setup-pstack for the <model>:<effort> role value in write seats. Reads the poteto-mode skill in full before any work.
-model: <model>
-effort: <effort>
----
-
-# poteto agent (<model>, <effort> effort)
-
-<!-- pstack effort agent template 2 -->
-
-You are operating as poteto-mode's full agent style. The brief names `<pstack>`, the pstack root, and `<store>`. If it does not, run `ls -d "${CLAUDE_CONFIG_DIR:-$HOME/.claude}"/plugins/cache/*/pstack/*/` and take the version directory without an `.orphaned_at` file, which Claude Code adds to a version it replaced. `<store>` is then the `store` directory in `plugins/data/pstack-<marketplace>/`, where `<marketplace>` is the directory above `pstack` in that path. Read `<pstack>/skills/poteto-mode/SKILL.md` in full before doing any work, including its inline Principles index. Navigate to a leaf `principle-*` skill whenever you apply that principle.
-```
-
-The phrase `Generated by /pstack:setup-pstack` marks an agent as this skill's. The skill only ever rewrites or deletes agents that carry it. A user agent sees no plugin paths, so name `<pstack>` and `<store>` in every brief to a write variant. If an effort agent is missing, `pstack-role` falls back to the plain model at the session's effort and says so in `note=`. If one lacks the template line of the current version, `pstack-role` still uses it and adds a `note=` that it is stale. Either way, the reply tells the user to re-run this skill. Claude Code shows each seat's effort next to its model in `/tasks`. Uninstalling pstack leaves these files behind. To remove them, delete each `~/.claude/agents/pstack-*.md` that carries the marker.
+Claude Code's Agent tool has no effort parameter. A subagent takes its effort from the `effort` frontmatter of its definition, even when the Agent call sets `model`. So pstack ships copies of its two seat agents, one per effort level. `pstack:reviewer-<effort>` has the prompt and tools of `pstack:reviewer`, and `pstack:poteto-agent-<effort>` has those of `pstack:poteto-agent`. They set no model, because the Agent call passes one. Claude Code lists every plugin agent in every session, so the ten cost about 230 tokens of context per session, used or not. Claude Code shows each seat's effort next to its model in `/tasks`.
 
 ### Bridge brief
 
@@ -192,9 +153,9 @@ interrogate reviewers: opus, opus, sonnet
 
 Write active aliases without the leading `# `.
 
-### 6. Generate the effort agents
+### 6. Remove generated effort agents
 
-Collect every `<model>:<effort>` value in the file, after expanding aliases. For each one, write both variants from Effort agents to `~/.claude/agents/`, overwriting existing files so re-runs stay idempotent and pick up template changes from plugin updates. Then delete each `~/.claude/agents/pstack-*.md` file that carries the `Generated by /pstack:setup-pstack` marker but no longer matches a value in the file. Never touch an agent without the marker. List what you wrote and deleted.
+Earlier versions of this skill wrote effort agents to `~/.claude/agents/`. pstack ships them now, so remove the old copies. Find them with `grep -l 'Generated by /pstack:setup-pstack' "${CLAUDE_CONFIG_DIR:-$HOME/.claude}"/agents/pstack-*.md` and delete each file it prints. Never touch a `pstack-*.md` without that marker. List what you deleted, or say there was nothing to delete.
 
 ### 7. Confirm
 

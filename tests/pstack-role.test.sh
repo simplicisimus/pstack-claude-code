@@ -7,11 +7,6 @@ bin="$root/pstack/bin/pstack-role"
 tmp=$(mktemp -d "${TMPDIR:-/tmp}/pstack-role-test.XXXXXX")
 trap 'rm -rf "$tmp"' EXIT
 
-mkdir -p "$tmp/agents"
-for name in pstack-opus-max-review pstack-opus-max; do
-	printf -- '---\nname: %s\n---\n\n<!-- pstack effort agent template 2 -->\n' "$name" >"$tmp/agents/$name.md"
-done
-printf -- '---\nname: pstack-haiku-low-review\n---\n' >"$tmp/agents/pstack-haiku-low-review.md"
 while IFS= read -r line; do printf '%s\r\n' "$line"; done >"$tmp/pstack-models.md" <<'EOF'
 # pstack model configuration. One line per role.
 # @old: sonnet
@@ -27,7 +22,7 @@ interrogate reviewers: opus:max, @gpt, @grok, @free
 swarm workers: @free
 mechanical edits: inherit
 why investigators: agent:my-investigator
-reflect tooling: haiku:low
+why synthesizer: opus:turbo
 arena runners: opus:max, @gpt
 arena cross-judge pool: @or, @chain, @missing, gpt-9
 architect runners: @free
@@ -47,27 +42,31 @@ check() {
 run() { "$bin" --config "$tmp/pstack-models.md" "$@" 2>&1 | grep -v '^#'; }
 
 check "panel of effort agent, bridges, and a disabled alias" \
-"seat=1 value=opus:max subagent_type=pstack-opus-max-review
+"seat=1 value=opus:max subagent_type=pstack:reviewer-max model=opus
 seat=2 value=@gpt=codex:gpt-6-astra:high subagent_type=pstack:codex-bridge bridge=codex brief_model=gpt-6-astra brief_effort=high brief_mode=review
 seat=3 value=@grok=grok:grok-4.7 subagent_type=pstack:grok-bridge bridge=grok brief_model=grok-4.7 brief_effort=default brief_mode=review
 seat=4 value=@free skip=alias-disabled" \
 "$(run --seat review --default "opus, opus, sonnet" "interrogate reviewers")"
 
-check "write seat uses the write variant of an effort agent" \
-"seat=1 value=opus:max subagent_type=pstack-opus-max" \
+check "an effort value in a write seat runs the poteto agent at that effort" \
+"seat=1 value=opus:max subagent_type=pstack:poteto-agent-max model=opus" \
 "$(run --seat write --default opus "hardest tasks")"
 
-check "a missing effort agent falls back to the plain model and says so" \
-"seat=1 value=sonnet:high subagent_type=pstack:reviewer model=sonnet note=missing-pstack-sonnet-high-review-agent-so-session-effort-rerun-setup-pstack" \
+check "an effort value in a write seat ignores --write-agent" \
+"seat=1 value=opus:max subagent_type=pstack:poteto-agent-max model=opus" \
+"$(run --seat write --write-agent general-purpose --default opus "hardest tasks")"
+
+check "an effort value in a review seat runs the reviewer at that effort" \
+"seat=1 value=sonnet:high subagent_type=pstack:reviewer-high model=sonnet" \
 "$(run --seat review --default sonnet "how explorer")"
+
+check "an unknown effort falls back to the default and says why" \
+"seat=1 value=opus subagent_type=pstack:reviewer model=opus note=fallback-for-opus:turbo-unknown-effort" \
+"$(run --seat review --default opus "why synthesizer")"
 
 check "a single-value role on a disabled alias falls back to the default" \
 "seat=1 value=sonnet subagent_type=general-purpose model=sonnet note=disabled-alias-so-skill-default" \
 "$(run --seat write --write-agent general-purpose --default sonnet "swarm workers")"
-
-check "an effort agent from an older template still runs and is flagged" \
-"seat=1 value=haiku:low subagent_type=pstack-haiku-low-review note=stale-pstack-haiku-low-review-agent-rerun-setup-pstack" \
-"$(run --seat review --default sonnet "reflect tooling")"
 
 check "inherit omits the model" \
 "seat=1 value=inherit subagent_type=pstack:poteto-agent" \
@@ -78,7 +77,7 @@ check "agent: swaps the subagent type" \
 "$(run --seat review --default sonnet "why investigators")"
 
 check "a bridge in a write seat runs in a worktree" \
-"seat=1 value=opus:max subagent_type=pstack-opus-max
+"seat=1 value=opus:max subagent_type=pstack:poteto-agent-max model=opus
 seat=2 value=@gpt=codex:gpt-6-astra:high subagent_type=pstack:codex-bridge bridge=codex brief_model=gpt-6-astra brief_effort=high brief_mode=write isolation=worktree" \
 "$(run --seat write --default "opus, opus, sonnet" "arena runners")"
 
@@ -94,7 +93,7 @@ check "a panel never refills a disabled alias" \
 "$(run --seat review --panel --default "opus, opus, sonnet" "architect runners")"
 
 check "a panel skips its disabled seat and runs the rest" \
-"seat=1 value=opus:max subagent_type=pstack-opus-max-review
+"seat=1 value=opus:max subagent_type=pstack:reviewer-max model=opus
 seat=2 value=@gpt=codex:gpt-6-astra:high subagent_type=pstack:codex-bridge bridge=codex brief_model=gpt-6-astra brief_effort=high brief_mode=review
 seat=3 value=@grok=grok:grok-4.7 subagent_type=pstack:grok-bridge bridge=grok brief_model=grok-4.7 brief_effort=default brief_mode=review
 seat=4 value=@free skip=alias-disabled" \

@@ -49,9 +49,6 @@ while [ $# -gt 0 ]; do
 done
 case "$seat" in review | write) ;; *) usage ;; esac
 [ -n "$role" ] || usage
-agents_dir=$(dirname "$config")/agents
-# setup-pstack writes this line into every effort agent. Bump both together when its templates change.
-template="pstack effort agent template 2"
 
 lookup() {
 	[ -f "$config" ] || return 1
@@ -115,17 +112,9 @@ resolve() {
 		local model=${v%%:*} effort=${v#*:}
 		case "$model" in opus | sonnet | haiku | fable) ;; *) echo "error=unknown-value" && return ;; esac
 		case "$effort" in low | medium | high | xhigh | max) ;; *) echo "error=unknown-effort" && return ;; esac
-		local name="pstack-$model-$effort"
-		[ "$seat" = review ] && name="$name-review"
-		if [ -f "$agents_dir/$name.md" ]; then
-			if grep -qF "$template" "$agents_dir/$name.md"; then
-				echo "subagent_type=$name"
-			else
-				echo "subagent_type=$name note=stale-$name-agent-rerun-setup-pstack"
-			fi
-		else
-			echo "$(plain_seat "$model") note=missing-$name-agent-so-session-effort-rerun-setup-pstack"
-		fi
+		local agent=poteto-agent
+		[ "$seat" = review ] && agent=reviewer
+		echo "subagent_type=pstack:$agent-$effort model=$model"
 		;;
 	*) echo "error=unknown-value" ;;
 	esac

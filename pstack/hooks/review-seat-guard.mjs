@@ -3,7 +3,7 @@
 // It catches the slips the reviewer prompt forbids. It is a heuristic, not a sandbox, so the prompt still applies.
 import { readFileSync } from "node:fs";
 
-const REVIEW_SEAT = /^(pstack:reviewer|pstack-(opus|sonnet|haiku|fable)-(low|medium|high|xhigh|max)-review)$/;
+const REVIEW_SEAT = /^pstack:reviewer(-(low|medium|high|xhigh|max))?$/;
 const SCRATCH_PREFIX = /^(\/dev\/(null|stdout|stderr|tty|fd\/\d+)$|\/tmp(\/|$)|\/private\/tmp(\/|$)|\/var\/folders\/|\/private\/var\/folders\/)/;
 const WRITES = "changes the repository";
 
