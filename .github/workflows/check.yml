@@ -1,0 +1,44 @@
+name: check
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+jobs:
+  plugin:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install Claude Code
+        run: |
+          curl -fsSL https://claude.ai/install.sh | bash
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Validate the marketplace, plugin, skills, and agents
+        run: |
+          claude plugin validate --strict .
+          claude plugin validate --strict ./pstack
+          claude plugin validate --strict ./pstack/skills
+          claude plugin validate --strict ./pstack/agents
+      - name: Check shell syntax
+        run: for f in pstack/bin/pstack-seat pstack/bin/pstack-role pstack/hooks/review-seat-guard tests/*.sh tests/effort-probe/run.sh; do bash -n "$f"; done
+      - run: tests/pstack-role.test.sh
+      - run: tests/pstack-seat.test.sh
+      - run: tests/review-seat-guard.test.sh
+
+  scripts:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: pstack/skills/poteto-mode/scripts
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - run: bun test orch watch-pr

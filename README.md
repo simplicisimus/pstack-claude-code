@@ -30,7 +30,7 @@ Then run `/pstack:setup-pstack` once to choose models per role.
 /pstack:interrogate review this pr.
 ```
 
-Every skill except `setup-pstack` is user-invocable only (`disable-model-invocation: true`, as upstream). That keeps 45 skill descriptions out of every session's context. `poteto-mode` reaches the others by reading `${CLAUDE_PLUGIN_ROOT}/skills/<name>/SKILL.md` directly.
+Every skill except `setup-pstack` and `typescript-best-practices` is user-invocable only (`disable-model-invocation: true`, as upstream). That keeps 44 skill descriptions out of every session's context. `typescript-best-practices` loads by itself when Claude works on `.ts` and `.tsx` files, through its `paths` field. `poteto-mode` reaches the other skills by reading `${CLAUDE_PLUGIN_ROOT}/skills/<name>/SKILL.md` directly.
 
 ## What changed from the Cursor version
 
@@ -45,11 +45,14 @@ Every skill except `setup-pstack` is user-invocable only (`disable-model-invocat
 | Reasoning-effort budgets | `max` / `balanced` / `lean` model-tier budgets, plus a fixed effort per role with `<model>:<effort>` |
 | `~/.cursor/projects/<slug>/agent-transcripts/` | `~/.claude/projects/<slug>/<session-id>.jsonl` |
 | `subagent_type: "poteto-agent"`, `"Comment Sicko"` | `pstack:poteto-agent`, `pstack:comment-sicko` |
-| `mode: true` sticky mode with `reminder` | A sticky instruction at the top of `poteto-mode` (invoked skill content stays in context) |
+| `mode: true` sticky mode with `reminder` | A `UserPromptSubmit` hook in `poteto-mode`'s frontmatter that repeats the reminder on every prompt after `/pstack:poteto-mode` |
+| The agent store, named in the system prompt | `${CLAUDE_PLUGIN_DATA}/store`, named in `poteto-mode` |
+| The agent arms a `/goal` | The operator types Claude Code's `/goal` from a line pstack hands over |
+| Todo list | `TaskCreate` and `TaskUpdate`, or `TodoWrite`, when the session has them, otherwise a file |
 | `cursor-team-kit` (`deslop`, `control-ui`, `control-cli`) | `deslop` copied into `~/.claude/skills/` (falls back to the built-in `simplify` skill), built-in browser tools, Bash, `run` skill |
 | `create-skill` (Cursor built-in) | `skill-creator` skill |
 
-The "Platform mapping" table in `skills/poteto-mode/SKILL.md` tells the agent how to translate any Cursor term still left in the playbooks.
+[`skills/poteto-mode/references/claude-code.md`](pstack/skills/poteto-mode/references/claude-code.md) maps every Cursor term still left in the playbooks.
 
 ## Multi-model panels
 
@@ -81,16 +84,19 @@ The parent writes the whole prompt to a private file and spawns the bridge with 
 - **Review seats** cannot write to your checkout. Codex runs with `-s read-only`. Grok runs in its `workspace` sandbox from a scratch directory and reads the repository by absolute path. Its `read-only` sandbox is not used because it refuses to start on some Macs, for example when `/var/run/docker.sock` is a symlink. The `workspace` sandbox also lets Grok write under `/tmp`, so a repository under `/tmp` is not protected, and the status line says so.
 - **Write seats** run only inside a linked git worktree, which the Agent tool creates with `isolation: "worktree"`. Asked to write anywhere else, including your main checkout, the seat runs as review and the status line says why. Changes are left uncommitted for the parent to review.
 - **MCP servers stay out.** Codex runs with `--ignore-user-config`, so your Codex MCP servers, hooks, and notify program don't run, and your Codex login still works. Grok runs without `search_tool` and `use_tool`, its gateway to MCP servers. MCP servers run outside both sandboxes, so either CLI could otherwise edit files through them.
-- **Claude review seats** run as `pstack:reviewer`, which has no edit tools and cannot start subagents, but keeps Bash and MCP tools.
+- **Seats end before the Bash timeout.** `pstack-seat` stops the CLI and its child processes 30 seconds before `BASH_MAX_TIMEOUT_MS`. Claude Code would otherwise move the command to the background and keep it running after the bridge gave up. From the main conversation, a review seat can instead run `pstack-seat` as a background Bash task, which has no timeout.
+- **Claude review seats** run as `pstack:reviewer`, which has no edit tools and cannot start subagents, but keeps Bash and MCP tools. A `PreToolUse` hook blocks the Bash and Monitor commands in those seats that write outside scratch directories, edit in place, change git or GitHub state, or install packages.
 
 ### Claude effort per role
 
-A plain `opus` seat runs at your session's effort level. For a fixed level, write `<model>:<effort>`, for example `opus:max` for the review panels or `opus:high` for explorers. Claude Code's Agent tool has no effort parameter and ignores `effort` in plugin agents, so `/pstack:setup-pstack` generates a user agent pair in `~/.claude/agents/` for each such value:
+A plain `opus` seat runs at your session's effort level. For a fixed level, write `<model>:<effort>`, for example `opus:max` for the review panels or `opus:high` for explorers. Claude Code's Agent tool has no effort parameter, and a subagent's effort comes from the `effort` frontmatter of its definition. Every agent's description also sits in every session's context. So `/pstack:setup-pstack` generates a user agent pair in `~/.claude/agents/` only for the values you use:
 
 - `pstack-<model>-<effort>-review`, a read-only review seat;
 - `pstack-<model>-<effort>`, a code delegate in poteto's style.
 
-pstack picks the right one for the seat. The generated files carry the marker `Generated by /pstack:setup-pstack`. Re-running setup rewrites them and deletes the ones no longer used, and leaves every other agent alone. `/tasks` shows each seat's effort next to its model.
+`pstack-role` picks the right one for the seat. The generated files carry the marker `Generated by /pstack:setup-pstack`. Re-running setup rewrites them and deletes the ones no longer used, and leaves every other agent alone. Uninstalling pstack leaves them behind, so delete the `~/.claude/agents/pstack-*.md` files that carry the marker. `/tasks` shows each seat's effort next to its model.
+
+Tested on Claude Code 2.1.284. A generated `pstack-sonnet-low-review` seat ran every turn at `low` while the session ran at `max`, and a plain `pstack:reviewer` seat ran at `max`. Each subagent transcript records this as `perTurnEffort`. Claude Code's plugin reference lists `effort` among the fields plugin agents support, and [`tests/effort-probe/run.sh`](tests/effort-probe/run.sh) checks whether that holds on your version.
 
 ```
 interrogate reviewers: opus:max, @gpt, @grok
@@ -100,11 +106,14 @@ how explorer: opus:high
 
 ### Settings worth adding
 
-External seats run in the foreground and Claude Code's Bash tool stops them after 10 minutes by default. Write seats start from your default branch unless told otherwise. Both are settings in `~/.claude/settings.json`:
+External seats run in the foreground, and the Bash tool's timeout is 10 minutes by default. Write seats start from your default branch unless told otherwise. Newer models, such as Opus 5.5, get no todo tools unless you enable them, and pstack's playbooks start with a todo list. All three are settings in `~/.claude/settings.json`:
 
 ```json
 {
-  "env": { "BASH_MAX_TIMEOUT_MS": "1800000" },
+  "env": {
+    "BASH_MAX_TIMEOUT_MS": "1800000",
+    "CLAUDE_CODE_ENABLE_TODO_TOOLS": "1"
+  },
   "worktree": { "baseRef": "head" }
 }
 ```
@@ -120,12 +129,21 @@ External seats send code and diffs to that provider. `reflect` sends the session
 - `make-bot-ui`. It targets Cursor Automations webhooks.
 - The `benny` automation pack and the `docs/guide`. Both are Cursor-specific.
 
-The `scripts/` tooling (`watch-pr`, `orch`) is included unchanged. It needs [Bun](https://bun.sh).
+The `scripts/` tooling (`watch-pr`, `orch`) is included unchanged, apart from a `bun.lock` that names the renamed package. It needs [Bun](https://bun.sh), and it installs its dependencies next to the scripts on first run.
 
 ## Changes in this fork
 
 Relative to [mix64/pstack-claude-code@cbb2b75](https://github.com/mix64/pstack-claude-code/tree/cbb2b75):
 
+- **Claude Code conformance.**
+  - **poteto-mode stays on.** A `UserPromptSubmit` hook in its frontmatter repeats upstream's `reminder` on every prompt, as Cursor's `mode: true` did. Its routing sections now come first, because after compaction Claude Code keeps only the first 5,000 tokens of an invoked skill.
+  - **Cursor runtime terms mapped.** `references/claude-code.md` holds the map. The agent store is `${CLAUDE_PLUGIN_DATA}/store`. The operator types `/goal` from a line pstack hands over. Audit ticks run on the `loop` skill. Swarm, orchestrate, and the autopilots stay under Claude Code's cap of 20 running subagents. A todo list falls back to a file on models without todo tools.
+  - **Transcripts found the Claude Code way.** poteto-mode names the session ID and transcript. `reflect` matches the first `user` line, and its reviewers look for `Bash` calls, not Cursor's `Shell`.
+  - **External seats stop in time.** `pstack-seat` stops the CLI 30 seconds before the Bash timeout. Before, Claude Code moved the timed-out command to the background, the bridge reported `FAILED`, and the CLI kept running on your subscription. The bridges also cap their turns and skip CLAUDE.md.
+  - **One role resolver.** `bin/pstack-role` applies the value grammar that seven skills used to restate. `--panel` keeps a disabled alias from being refilled in a panel.
+  - **Review seats enforced.** A `PreToolUse` hook blocks Bash and Monitor commands that write files or change the repository in `pstack:reviewer` and the generated `-review` agents.
+  - **Plugin paths from Claude Code.** `pstack:poteto-agent` and the bridges get `${CLAUDE_PLUGIN_ROOT}` from their own definitions instead of searching the plugin cache. The generated agents' fallback skips versions that Claude Code marked `.orphaned_at`.
+  - **Smaller fixes.** `typescript-best-practices` loads for `.ts` files again, since its `paths` did nothing next to `disable-model-invocation`. `bun.lock` names the renamed package. `setup-pstack` offers at most four AskUserQuestion options and the todo-tools setting. Skills show argument hints. Autopilot slop-strips use `deslop` first. The `how` prompts no longer assume Glob and Grep tools. The marketplace names its owner and describes itself.
 - **Grok seats.** The `grok:<model>[:<effort>]` value and the `pstack:grok-bridge` agent.
 - **Bridges rebuilt.** Codex and Grok seats run through `bin/pstack-seat`. The parent writes the prompt file, the bridge returns the answer file's path, and effort can be set per seat.
   - Write seats find their worktree themselves. Before, a Codex write seat quietly fell back to review because the parent could not tell it the worktree path.
@@ -149,6 +167,22 @@ Relative to [mix64/pstack-claude-code@cbb2b75](https://github.com/mix64/pstack-c
   - The arena cross-judge default matches `setup-pstack`.
   - Disabled aliases drop their seat instead of falling back.
   - `plugin.json` points at this repository.
+
+## Development
+
+The tests need bash and node. CI runs them on Linux and macOS, with `claude plugin validate --strict` and the Bun suites for `scripts/`.
+
+```
+tests/pstack-role.test.sh
+tests/pstack-seat.test.sh
+tests/review-seat-guard.test.sh
+```
+
+`tests/effort-probe/run.sh` checks which `effort` frontmatter Claude Code applies to subagents. It needs a logged-in `claude` CLI and costs a few Sonnet turns.
+
+Eval cases live in [`pstack/evals/`](pstack/evals). `claude plugin eval ./pstack --ablation none` runs them, and each run is a real Claude session on your account.
+
+To release, bump `version` in `pstack/.claude-plugin/plugin.json`, then run `claude plugin tag ./pstack`. It checks that the manifests agree and creates the `pstack--v<version>` tag.
 
 ## License
 
