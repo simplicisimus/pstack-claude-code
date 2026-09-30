@@ -1,0 +1,18 @@
+{
+  "description": "Keeps pstack's read-only review seats from changing files or repository state through Bash or Monitor.",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash|Monitor",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "${CLAUDE_PLUGIN_ROOT}/hooks/review-seat-guard",
+            "args": [],
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}
