@@ -27,7 +27,9 @@ jobs:
           claude plugin validate --strict ./pstack/skills
           claude plugin validate --strict ./pstack/agents
       - name: Check shell syntax
-        run: for f in pstack/bin/pstack-seat pstack/bin/pstack-role pstack/hooks/review-seat-guard tests/*.sh tests/effort-probe/run.sh; do bash -n "$f"; done
+        run: for f in pstack/bin/pstack-seat pstack/bin/pstack-role pstack/hooks/review-seat-guard tools/gen-effort-agents tests/*.sh tests/effort-probe/run.sh; do bash -n "$f"; done
+      - name: Check that the effort agents match their generator
+        run: tools/gen-effort-agents --check
       - run: tests/pstack-role.test.sh
       - run: tests/pstack-seat.test.sh
       - run: tests/review-seat-guard.test.sh
