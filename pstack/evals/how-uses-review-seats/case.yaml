@@ -1,5 +1,0 @@
-schema_version: "1.1"
-name: how-uses-review-seats
-tags: [routing]
-context:
-  add_dirs: [fixture]
