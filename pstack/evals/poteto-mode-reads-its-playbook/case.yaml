@@ -1,0 +1,5 @@
+schema_version: "1.1"
+name: poteto-mode-reads-its-playbook
+tags: [routing]
+context:
+  add_dirs: [fixture]
