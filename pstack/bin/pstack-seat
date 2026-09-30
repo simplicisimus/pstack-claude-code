@@ -3,17 +3,22 @@
 # The parent writes the prompt to a file. This script writes the answer next to it
 # and prints one status line, so no relay model ever retypes the prompt or the answer.
 #
-#   pstack-seat --cli codex|grok --model M [--effort E] --mode review|write --repo DIR --prompt FILE
+#   pstack-seat --cli codex|grok --model M [--effort E] --mode review|write --repo DIR --prompt FILE [--deadline SECONDS]
 #
 # review: the CLI can read the repository but cannot write to it.
 # write:  allowed only inside a linked git worktree (the Agent tool's isolation: "worktree").
 #         Anywhere else, including the user's main checkout, the seat runs as review.
+#
+# The CLI is stopped at the deadline, by default 30 seconds (or half, if that is shorter) under
+# BASH_MAX_TIMEOUT_MS, else 10 minutes, the timeout the bridge agents pass to the Bash tool. Claude Code
+# moves a command that outlives its timeout to the background and keeps it running, so a seat must end first.
+# --deadline 0 turns the limit off, for a seat the parent runs as a background task.
 set -u
 
-cli="" model="" effort="" mode="review" repo="" prompt=""
+cli="" model="" effort="" mode="review" repo="" prompt="" deadline=""
 
 usage() {
-	echo "usage: pstack-seat --cli codex|grok --model M [--effort E] --mode review|write --repo DIR --prompt FILE" >&2
+	echo "usage: pstack-seat --cli codex|grok --model M [--effort E] --mode review|write --repo DIR --prompt FILE [--deadline SECONDS]" >&2
 	exit 2
 }
 
@@ -26,17 +31,18 @@ while [ $# -gt 0 ]; do
 	--mode) mode=$2 ;;
 	--repo) repo=$2 ;;
 	--prompt) prompt=$2 ;;
+	--deadline) deadline=$2 ;;
 	*) usage ;;
 	esac
 	shift 2
 done
 
 fail() {
-	echo "${cli:-pstack}-bridge: FAILED $*"
+	echo "${label:-pstack-seat}: FAILED $*"
 	exit 1
 }
 
-case "$cli" in codex | grok) ;; *) fail "--cli must be codex or grok" ;; esac
+case "$cli" in codex | grok) label="$cli-bridge" ;; *) fail "--cli must be codex or grok" ;; esac
 case "$mode" in review | write) ;; *) fail "--mode must be review or write" ;; esac
 [ -n "$model" ] || fail "--model is required"
 [ -f "$prompt" ] || fail "prompt file not found: $prompt"
@@ -45,10 +51,50 @@ case "$mode" in review | write) ;; *) fail "--mode must be review or write" ;; e
 [ -d "$repo" ] || fail "repository not found: $repo"
 command -v "$cli" >/dev/null 2>&1 || fail "$cli is not on PATH"
 
+if [ -z "$deadline" ]; then
+	bash_limit_ms=${BASH_MAX_TIMEOUT_MS:-600000}
+	case "$bash_limit_ms" in '' | *[!0-9]*) bash_limit_ms=600000 ;; esac
+	deadline=$((bash_limit_ms / 1000 - 30))
+	[ "$deadline" -ge $((bash_limit_ms / 2000)) ] || deadline=$((bash_limit_ms / 2000))
+	[ "$deadline" -ge 1 ] || deadline=1
+fi
+case "$deadline" in '' | *[!0-9]*) fail "--deadline must be a number of seconds" ;; esac
+
 dir=$(cd "$(dirname "$prompt")" && pwd)
 answer="$dir/answer.md"
 log="$dir/$cli.log"
-rm -f "$answer"
+deadline_hit="$dir/deadline-hit"
+rm -f "$answer" "$deadline_hit"
+
+# Runs "$@" in its own process group and stops the whole group at the deadline.
+run_bounded() {
+	if [ "$deadline" -eq 0 ]; then
+		"$@"
+		return
+	fi
+	set -m
+	"$@" &
+	local job=$!
+	set +m
+	(
+		trap 'kill "$nap" 2>/dev/null; exit 0' TERM
+		sleep "$deadline" &
+		nap=$!
+		wait "$nap"
+		: >"$deadline_hit"
+		kill -TERM -- "-$job" 2>/dev/null
+		sleep 5 &
+		nap=$!
+		wait "$nap"
+		kill -KILL -- "-$job" 2>/dev/null
+	) &
+	local watchdog=$!
+	local status=0
+	{ wait "$job"; } 2>/dev/null || status=$?
+	kill -TERM "$watchdog" 2>/dev/null
+	wait "$watchdog" 2>/dev/null
+	return "$status"
+}
 
 note=""
 wd=""
@@ -77,7 +123,7 @@ codex)
 	set -- exec --ignore-user-config -m "$model" -s "$sandbox" --skip-git-repo-check \
 		--ephemeral --color never -C "$wd" -o "$answer"
 	[ -n "$effort" ] && set -- "$@" -c "model_reasoning_effort=$effort"
-	codex "$@" - <"$prompt" >"$log" 2>&1 || rc=$?
+	run_bounded codex "$@" - <"$prompt" >"$log" 2>&1 || rc=$?
 	;;
 grok)
 	# Grok's read-only and strict sandboxes can refuse to start (for example when
@@ -106,12 +152,15 @@ grok)
 	set -- --prompt-file "$run_prompt" -m "$model" --cwd "$wd" --sandbox workspace \
 		--always-approve --disallowed-tools "$deny" --output-format plain
 	[ -n "$effort" ] && set -- "$@" --reasoning-effort "$effort"
-	(cd "$wd" && grok "$@") >"$answer" 2>"$log" || rc=$?
+	(cd "$wd" && run_bounded grok "$@") >"$answer" 2>"$log" || rc=$?
 	;;
 esac
 
 bytes=0
 [ -f "$answer" ] && bytes=$(wc -c <"$answer" | tr -d ' ')
+if [ -f "$deadline_hit" ]; then
+	fail "deadline=${deadline}s: $cli was stopped before the Bash timeout. Raise BASH_MAX_TIMEOUT_MS or lower the effort. Log: $log"
+fi
 if [ "$rc" -ne 0 ] || [ "$bytes" -eq 0 ]; then
 	fail "exit=$rc bytes=$bytes: $(tail -n 3 "$log" 2>/dev/null | tr '\n' ' ' | cut -c1-300)"
 fi
