@@ -2,12 +2,14 @@
 # Checks which `effort:` frontmatter Claude Code applies to a subagent.
 #
 # A headless session at --effort medium spawns plugin agents with effort low, high, and none,
-# the low one again with a model override, and a --agents session agent with effort low.
+# the low one again with a model override, a --agents session agent with effort low, and
+# pstack's own reviewer-low and poteto-agent-high with model sonnet.
 # Each subagent transcript records the effort of every turn in `perTurnEffort`, so the table
 # shows what actually ran. Needs a logged-in `claude` CLI and python3. Costs a few Sonnet turns.
 set -euo pipefail
 
 here=$(cd "$(dirname "$0")" && pwd)
+pstack=$(cd "$here/../../pstack" && pwd)
 config=${CLAUDE_CONFIG_DIR:-$HOME/.claude}
 
 if ! claude auth status 2>/dev/null | grep -q '"loggedIn": true'; then
@@ -19,15 +21,17 @@ work=$(mktemp -d "${TMPDIR:-/tmp}/effort-probe.XXXXXX")
 cd "$work"
 
 session_agents='{"probe-session-low":{"description":"Effort probe fixture. Spawn only when a test names it.","prompt":"Reply with exactly: OK","model":"sonnet","effort":"low"}}'
-prompt="This is an automated test of subagent settings. In ONE message, make exactly these five Agent tool calls in parallel. Give each run_in_background false, the prompt 'Reply with exactly: OK', and the description shown:
+prompt="This is an automated test of subagent settings. In ONE message, make exactly these seven Agent tool calls in parallel. Give each run_in_background false, the prompt 'Reply with exactly: OK', and the description shown:
 1. description 'arm plugin-low', subagent_type 'effort-probe:probe-low', no model parameter
 2. description 'arm plugin-high', subagent_type 'effort-probe:probe-high', no model parameter
 3. description 'arm plugin-none', subagent_type 'effort-probe:probe-none', no model parameter
 4. description 'arm plugin-low-opus', subagent_type 'effort-probe:probe-low', model 'opus'
 5. description 'arm session-low', subagent_type 'probe-session-low', no model parameter
-After all five return, reply with just DONE. Use no other tool."
+6. description 'arm pstack reviewer-low', subagent_type 'pstack:reviewer-low', model 'sonnet'
+7. description 'arm pstack poteto-agent-high', subagent_type 'pstack:poteto-agent-high', model 'sonnet'
+After all seven return, reply with just DONE. Use no other tool."
 
-claude -p --plugin-dir "$here/plugin" --agents "$session_agents" --model sonnet --effort medium \
+claude -p --plugin-dir "$here/plugin" --plugin-dir "$pstack" --agents "$session_agents" --model sonnet --effort medium \
 	--max-turns 6 --output-format json "$prompt" >"$work/result.json"
 
 python3 - "$work/result.json" "$config" <<'PY'
@@ -47,6 +51,8 @@ expected = {
     "arm plugin-none": "medium",
     "arm plugin-low-opus": "low",
     "arm session-low": "low",
+    "arm pstack reviewer-low": "low",
+    "arm pstack poteto-agent-high": "high",
 }
 seen = {}
 for meta_path in glob.glob(os.path.join(dirs[0], "agent-*.meta.json")):
@@ -61,10 +67,10 @@ for meta_path in glob.glob(os.path.join(dirs[0], "agent-*.meta.json")):
                 models.add(event["message"].get("model", "?"))
     seen[arm] = (meta.get("agentType", "?"), ",".join(sorted(models)), ",".join(sorted(efforts)))
 
-print(f"{'arm':<22}{'agent type':<28}{'model':<20}{'ran at':<10}expected")
+print(f"{'arm':<30}{'agent type':<28}{'model':<20}{'ran at':<10}expected")
 for arm, want in expected.items():
     agent, model, effort = seen.get(arm, ("missing", "-", "-"))
-    print(f"{arm:<22}{agent:<28}{model:<20}{effort:<10}{want}")
+    print(f"{arm:<30}{agent:<28}{model:<20}{effort:<10}{want}")
 
 plugin_low = seen.get("arm plugin-low", ("", "", ""))[2]
 plugin_high = seen.get("arm plugin-high", ("", "", ""))[2]
@@ -74,4 +80,10 @@ elif plugin_low == plugin_high == "medium":
     print("verdict: Claude Code ignores effort frontmatter in plugin agents. They run at the session effort.")
 else:
     print("verdict: inconclusive. Check the arms above.")
+
+pstack_arms = [seen.get(arm, ("", "", ""))[2] for arm in ("arm pstack reviewer-low", "arm pstack poteto-agent-high")]
+if pstack_arms == ["low", "high"]:
+    print("verdict: pstack's effort agents run at their effort with the model the call passes.")
+else:
+    print("verdict: pstack's effort agents did not run at their effort. Check the pstack arms above.")
 PY
