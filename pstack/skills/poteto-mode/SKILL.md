@@ -26,7 +26,7 @@ hooks:
 
 **Models.** Per-role models come from `~/.claude/pstack-models.md`, written by `/pstack:setup-pstack`. Resolve a role with `pstack-role`, which applies the value grammar in the **setup-pstack** skill.
 
-**Cursor terms.** The playbooks were written for Cursor. When a step names a Cursor term (`Task`, a cloud agent, readonly or Ask mode, the agent store, `/goal`, a wake chain or monitored-shell sleep, the Cursor dashboard or a Cursor restart, `control-ui`, `control-cli`, `cursor-team-kit`, `create-skill`, Bugbot) or a todolist in a session with no todo tool, translate it with `references/claude-code.md`.
+**Cursor terms.** The playbooks were written for Cursor. When a step names a Cursor term (`Task`, a cloud agent, readonly or Ask mode, the agent store, `/loop`, the Cursor dashboard or a Cursor restart, `control-ui`, `control-cli`, `cursor-team-kit`, `create-skill`, Bugbot) or a todolist in a session with no todo tool, translate it with `references/claude-code.md`.
 
 ## Playbooks
 

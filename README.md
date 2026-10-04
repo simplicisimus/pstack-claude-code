@@ -47,7 +47,6 @@ Every skill except `setup-pstack` and `typescript-best-practices` is user-invoca
 | `subagent_type: "poteto-agent"`, `"Comment Sicko"` | `pstack:poteto-agent`, `pstack:comment-sicko` |
 | `mode: true` sticky mode with `reminder` | A `UserPromptSubmit` hook in `poteto-mode`'s frontmatter that repeats the reminder on every prompt after `/pstack:poteto-mode` |
 | The agent store, named in the system prompt | `${CLAUDE_PLUGIN_DATA}/store`, named in `poteto-mode` |
-| The agent arms a `/goal` | The operator types Claude Code's `/goal` from a line pstack hands over |
 | Todo list | `TaskCreate` and `TaskUpdate`, or `TodoWrite`, when the session has them, otherwise a file |
 | `cursor-team-kit` (`deslop`, `control-ui`, `control-cli`) | `deslop` copied into `~/.claude/skills/` (falls back to the built-in `simplify` skill), built-in browser tools, Bash, `run` skill |
 | `create-skill` (Cursor built-in) | `skill-creator` skill |
@@ -139,11 +138,11 @@ The `scripts/` tooling (`watch-pr`, `orch`) is included unchanged, apart from a 
 
 ## Changes in this fork
 
-Relative to [mix64/pstack-claude-code@cbb2b75](https://github.com/mix64/pstack-claude-code/tree/cbb2b75):
+Relative to [mix64/pstack-claude-code@cbb2b75](https://github.com/mix64/pstack-claude-code/tree/cbb2b75), plus mix64's update to upstream 0.15.9 ([f51e899](https://github.com/mix64/pstack-claude-code/commit/f51e899)):
 
 - **Claude Code conformance.**
   - **poteto-mode stays on.** A `UserPromptSubmit` hook in its frontmatter repeats upstream's `reminder` on every prompt, as Cursor's `mode: true` did. Its routing sections now come first, because after compaction Claude Code keeps only the first 5,000 tokens of an invoked skill.
-  - **Cursor runtime terms mapped.** `references/claude-code.md` holds the map. The agent store is `${CLAUDE_PLUGIN_DATA}/store`. The operator types `/goal` from a line pstack hands over. Audit ticks run on the `loop` skill. Swarm, orchestrate, and the autopilots stay under Claude Code's cap of 20 running subagents. A todo list falls back to a file on models without todo tools.
+  - **Cursor runtime terms mapped.** `references/claude-code.md` holds the map. The agent store is `${CLAUDE_PLUGIN_DATA}/store`. Audit ticks run on the `loop` skill. Swarm, orchestrate, and the autopilots stay under Claude Code's cap of 20 running subagents. A todo list falls back to a file on models without todo tools.
   - **Transcripts found the Claude Code way.** poteto-mode names the session ID and transcript. `reflect` matches the first `user` line, and its reviewers look for `Bash` calls, not Cursor's `Shell`.
   - **External seats stop in time.** `pstack-seat` stops the CLI 30 seconds before the Bash timeout. Before, Claude Code moved the timed-out command to the background, the bridge reported `FAILED`, and the CLI kept running on your subscription. The bridges also cap their turns and skip CLAUDE.md.
   - **One role resolver.** `bin/pstack-role` applies the value grammar that seven skills used to restate. `--panel` keeps a disabled alias from being refilled in a panel.
