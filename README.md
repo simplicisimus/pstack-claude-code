@@ -1,6 +1,6 @@
 # pstack for Claude Code
 
-A Claude Code port of [pstack](https://github.com/cursor/plugins/tree/main/pstack) v0.15.5 by [poteto](https://x.com/poteto) (Lauren Tan), MIT licensed. The upstream README explains the philosophy. This file covers what differs on Claude Code.
+A Claude Code port of [pstack](https://github.com/cursor/plugins/tree/main/pstack) v0.15.9 by [poteto](https://x.com/poteto) (Lauren Tan), MIT licensed. The upstream README explains the philosophy. This file covers what differs on Claude Code.
 
 This is a fork of [mix64/pstack-claude-code](https://github.com/mix64/pstack-claude-code). It adds Grok panel seats, rebuilds the external-model bridges, and fixes bugs in the port. See [Changes in this fork](#changes-in-this-fork).
 
@@ -30,7 +30,7 @@ Then run `/pstack:setup-pstack` once to choose models per role. After updating f
 /pstack:interrogate review this pr.
 ```
 
-Every skill except `setup-pstack` and `typescript-best-practices` is user-invocable only (`disable-model-invocation: true`, as upstream). That keeps 44 skill descriptions out of every session's context. `typescript-best-practices` loads by itself when Claude works on `.ts` and `.tsx` files, through its `paths` field. `poteto-mode` reaches the other skills by reading `${CLAUDE_PLUGIN_ROOT}/skills/<name>/SKILL.md` directly.
+Every skill except `setup-pstack` and `typescript-best-practices` is user-invocable only (`disable-model-invocation: true`, as upstream). That keeps 47 skill descriptions out of every session's context. `typescript-best-practices` loads by itself when Claude works on `.ts` and `.tsx` files, through its `paths` field. `poteto-mode` reaches the other skills by reading `${CLAUDE_PLUGIN_ROOT}/skills/<name>/SKILL.md` directly.
 
 ## What changed from the Cursor version
 
