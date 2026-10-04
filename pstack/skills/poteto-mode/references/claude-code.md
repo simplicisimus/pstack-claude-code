@@ -19,7 +19,7 @@ The playbooks were written for Cursor. Each row maps a Cursor term to what Claud
 | `control-cli` (CLIs, TUIs) | Bash, and the `run` skill for launching. |
 | `/deslop` from `cursor-team-kit` | The `deslop` skill when installed (copy `cursor-team-kit/skills/deslop/SKILL.md` to `~/.claude/skills/deslop/`). Otherwise the built-in `simplify` skill over the diff. |
 | `create-skill` (Cursor built-in) | The `skill-creator` skill when available. Otherwise the **Authoring a skill** playbook alone. |
-| Bugbot, cloud-agent PR tools | Whatever PR reviewers and `gh` the repo has. |
+| Bugbot, a built-in PR tool | Whatever PR reviewers and `gh` the repo has. |
 | The repo's `AGENTS.md` files and rules | Its `CLAUDE.md` and `AGENTS.md` files and `.claude/rules/`. |
 | Glob and Grep tools | Absent by default on macOS, Linux, and WSL. Use `find` and `grep` through Bash there. |
 | A `Shell` tool call in a transcript | A `Bash` tool call. |
