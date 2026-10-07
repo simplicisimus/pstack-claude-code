@@ -167,6 +167,7 @@ Relative to [mix64/pstack-claude-code@cbb2b75](https://github.com/mix64/pstack-c
   - Agents end after their task and hand long work to a fresh agent through a file.
   - The autopilots start a fresh owner agent for each fix round and keep the root's context small.
   - Audit lanes run before live lanes, lanes report in a few lines that point at files, and a PR parks for the operator after three unclean rounds.
+- **Refused lanes go to the operator.** A lane whose command the permission checker refuses is blocked, not stuck, so the autopilots and orchestrate stop replacing it. In one overnight autopilot run, a single refused lane gated every append, and the permission checker refused 1,230 calls. The autopilots' plan also names a subagent-token budget next to the round cap.
 - **Smaller fixes.**
   - `automate-me` uses AskUserQuestion's real `multiSelect` parameter and its limit of 4 options.
   - The arena cross-judge default matches `setup-pstack`.
